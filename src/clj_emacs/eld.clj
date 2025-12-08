@@ -1,6 +1,13 @@
 (ns clj-emacs.eld
   (:require [clojure.string :as str]
-            [clojure.edn :as edn]))
+            [clojure.set :as set]))
+
+(defn join-chars
+  [s]
+  (let [sb (StringBuilder.)]
+    (doseq [c s]
+      (.append sb (char c)))
+    (str sb)))
 
 (defrecord Cons [car cdr])
 (defrecord Quote [data])
@@ -79,7 +86,7 @@
   (fn [s] (first s)))
 
 (defmethod read nil [s]
-  (throw (ex-info "" {:reason ::end-of-data})))
+  (throw (ex-info "空字符串" {:reason ::end-of-data})))
 
 (def whitespace-chars
   #{\space \tab \formfeed \return \newline})
@@ -104,9 +111,116 @@
   (apply str (skip-comment "; hello\nworld")) ; => "world"
   )
 
-(doseq [char whitespace-chars]
-  (defmethod read char [s]
+(doseq [c whitespace-chars]
+  (defmethod read c [s]
     (read (skip-whitespace s))))
 
 (defmethod read \; [s]
   (read (skip-comment s)))
+
+(defn read-open-string
+  [s]
+  (loop [acc [] s s]
+    (let [c (first s)]
+      (cond (nil? c) (throw (ex-info "eld 语法错误：未关闭字符串" {:reason ::unclosed-string}))
+            (= c \") [(join-chars acc) (rest s)]
+            (= c \\) (let [s (rest s)
+                           c (first s)]
+                       (cond (nil? c) (throw (ex-info "eld 语法错误：未关闭字符串" {:reason ::unclosed-string}))
+                             (= c \") (recur (conj acc \") (rest s))
+                             (= c \\) (recur (conj acc \\) (rest s))
+                             (= c \b) (recur (conj acc \backspace) (rest s))
+                             (= c \t) (recur (conj acc \tab) (rest s))
+                             (= c \f) (recur (conj acc \formfeed) (rest s))
+                             (= c \n) (recur (conj acc \newline) (rest s))
+                             (= c \r) (recur (conj acc \return) (rest s))
+                             :else (recur (conj acc c) (rest s))))
+            :else (recur (conj acc c) (rest s))))))
+
+(defmethod read \" [s]
+  (read-open-string (rest s)))
+
+(comment
+  (read "\"hello\r\nworld\"1") ; => ["hello\r\nworld" [\1]]
+  )
+
+(def num-map
+  {\0 0 \1 1 \2 2 \3 3 \4 4 \5 5 \6 6 \7 7 \8 8 \9 9})
+
+(defn read-number
+  [s]
+  (let [[i s] (loop [i 0 s s]
+                (let [c (first s)]
+                  (if-let [n (num-map c)]
+                    (recur (+ (* 10 i) n) (rest s))
+                    (if (or (nil? c) (= \. c) (contains? whitespace-chars c))
+                      [i s]
+                      (throw (ex-info "ELD 语法错误：未结束数字" {:reason ::unfinished-number}))))))]
+    (if-not (= \. (first s))
+      [i s]
+      (let [s (rest s)
+            [f s] (loop [f 0.0 base 0.1 s s]
+                    (let [c (first s)]
+                      (if-let [n (num-map c)]
+                        (recur (+ f (* base n)) (* 0.1 base) (rest s))
+                        (if (or (nil? c) (contains? whitespace-chars c))
+                          [f s]
+                          (throw (ex-info "ELD 语法错误：未结束数字" {:reason ::unfinished-number}))))))]
+        [(+ i f) s]))))
+
+(doseq [c (keys num-map)]
+  (defmethod read c [s]
+    (read-number s)))
+
+(defmethod read \. [s]
+  (when-not (contains? num-map (second s))
+    (throw (ex-info "ELD 语法错误：单独的点" {:reason ::single-dot})))
+  (read-number s))
+
+(comment
+  (read ".123 a") ; => [0.12300000000000001 (\space \a)]
+  (read "1.1 a") ; => [1.1 (\space \a)]
+  )
+
+(def symbol-continue-chars
+  (set "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@$%^&*-_=+/?.|<>"))
+
+(def symbol-start-chars
+  (set/difference symbol-continue-chars (set "-?.")))
+
+(defn read-symbol
+  [s]
+  (loop [acc [] s s]
+    (let [c (first s)]
+      (if-not (contains? symbol-continue-chars c)
+        [(join-chars acc) s]
+        (recur (conj acc c) (rest s))))))
+
+(doseq [c symbol-start-chars]
+  (defmethod read c [s]
+    (let [[sym s] (read-symbol s)]
+      [(symbol sym) s])))
+
+(defmethod read \: [s]
+  (let [[sym s] (read-symbol (rest s))]
+    (when (empty? sym)
+      (throw (ex-info "ELD 语法错误：空关键字" {:reason ::empty-keyword})))
+    [(keyword sym) s]))
+
+(defmethod read \- [s]
+  (let [c (second s)]
+    (if (or (= c \.) (contains? num-map c))
+      (let [[n s] (read-number (rest s))]
+        [(- n) s])
+      (let [[sym s] (read-symbol s)]
+        [(symbol sym) s]))))
+
+(comment
+  (read "hello a") ; => ['hello (\space \a)]
+  (read ":hello a") ; => [:hello (\space \a)]
+  (read "-123 a") ; => [-123 (\space \a)]
+  (read "-.1 a") ; => [-0.1 (\space \a)]
+  (read "- a") ; => [- (\space \a)]
+  (read "-hello a") ; => ['-hello (\space \a)]
+  (read "--> a") ; => ['--> (\space \a)]
+  )
