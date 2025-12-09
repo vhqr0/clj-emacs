@@ -303,3 +303,11 @@
   (read "(1 2 . 3) a") ; => [{:car 1 :cdr {:car 2 :cdr 3}} [\space \a]]
   (read "(1 2 .;3\n 3) a") ; => [{:car 1 :cdr {:car 2 :cdr 3}} [\space \a]]
   )
+
+(defn parse
+  [s]
+  (let [[data s] (read s)
+        s (skip-whitespace-and-comment s)]
+    (when (seq s)
+      (throw (ex-info "ELD 数据错误：未完全读取" {:reason ::unfinished-parse})))
+    data))
