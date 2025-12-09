@@ -304,7 +304,7 @@
   (read "(1 2 .;3\n 3) a") ; => [{:car 1 :cdr {:car 2 :cdr 3}} [\space \a]]
   )
 
-(defn parse
+(defn eld->clj
   [s]
   (let [[data s] (read s)
         s (skip-whitespace-and-comment s)]
