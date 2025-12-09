@@ -119,7 +119,7 @@
 ;;     (transient     \"0.10\")
 ;;     (with-editor   \"3.4\"))
 
-;; SPDX-License-Identifier: GPL-3.0-or-later ")
+;; SPDX-License-Identifier: GPL-3.0-or-later")
 
     (parse-headers test-header-lines-magit)
     ;; =>
