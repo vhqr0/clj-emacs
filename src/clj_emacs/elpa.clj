@@ -123,10 +123,10 @@
 
     (parse-headers test-header-lines-magit)
     ;; =>
-    {"author"                  ["Marius Vollmer <marius.vollmer@gmail.com>" "Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>"],
-     "package-revision"        ["3fe795e51af3"],
-     "homepage"                ["https://github.com/magit/magit"],
-     "package-version"         ["20251202.2209"],
+    {"author"                  ["Marius Vollmer <marius.vollmer@gmail.com>" "Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>"]
+     "package-revision"        ["3fe795e51af3"]
+     "homepage"                ["https://github.com/magit/magit"]
+     "package-version"         ["20251202.2209"]
      "package-requires"        ["("
                                 "(emacs        \"28.1\")"
                                 "(compat       \"30.1\")"
@@ -135,10 +135,10 @@
                                 "(magit-section \"4.4\")"
                                 "(seq           \"2.24\")"
                                 "(transient     \"0.10\")"
-                                "(with-editor   \"3.4\"))"],
-     "keywords"                ["git tools vc"],
-     "maintainer"              ["Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>" "Kyle Meyer <kyle@kyleam.com>"],
-     "spdx-license-identifier" ["GPL-3.0-or-later"],
+                                "(with-editor   \"3.4\"))"]
+     "keywords"                ["git tools vc"]
+     "maintainer"              ["Jonas Bernoulli <emacs.magit@jonas.bernoulli.dev>" "Kyle Meyer <kyle@kyleam.com>"]
+     "spdx-license-identifier" ["GPL-3.0-or-later"]
      "former-maintainers"      ["Nicolas Dudebout <nicolas.dudebout@gatech.edu>"
                                 "Noam Postavsky <npostavs@users.sourceforge.net>"
                                 "Peter J. Weisberg <pj@irregularexpressions.net>"
