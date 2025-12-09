@@ -1,4 +1,5 @@
 (ns clj-emacs.eld
+  (:refer-clojure :exclude [read])
   (:require [clojure.string :as str]
             [clojure.set :as set]))
 
@@ -122,11 +123,11 @@
   [s]
   (loop [acc [] s s]
     (let [c (first s)]
-      (cond (nil? c) (throw (ex-info "eld 语法错误：未关闭字符串" {:reason ::unclosed-string}))
+      (cond (nil? c) (throw (ex-info "ELD 语法错误：未关闭字符串" {:reason ::unclosed-string}))
             (= c \") [(join-chars acc) (rest s)]
             (= c \\) (let [s (rest s)
                            c (first s)]
-                       (cond (nil? c) (throw (ex-info "eld 语法错误：未关闭字符串" {:reason ::unclosed-string}))
+                       (cond (nil? c) (throw (ex-info "ELD 语法错误：未关闭字符串" {:reason ::unclosed-string}))
                              (= c \") (recur (conj acc \") (rest s))
                              (= c \\) (recur (conj acc \\) (rest s))
                              (= c \b) (recur (conj acc \backspace) (rest s))
@@ -178,8 +179,8 @@
   (read-number s))
 
 (comment
-  (read ".123 a") ; => [0.12300000000000001 (\space \a)]
-  (read "1.1 a") ; => [1.1 (\space \a)]
+  (read ".123 a") ; => [0.12300000000000001 [\space \a]]
+  (read "1.1 a") ; => [1.1 [\space \a]]
   )
 
 (def symbol-continue-chars
@@ -216,11 +217,23 @@
         [(symbol sym) s]))))
 
 (comment
-  (read "hello a") ; => ['hello (\space \a)]
-  (read ":hello a") ; => [:hello (\space \a)]
-  (read "-123 a") ; => [-123 (\space \a)]
-  (read "-.1 a") ; => [-0.1 (\space \a)]
-  (read "- a") ; => [- (\space \a)]
-  (read "-hello a") ; => ['-hello (\space \a)]
-  (read "--> a") ; => ['--> (\space \a)]
+  (read "hello a") ; => ['hello [\space \a]]
+  (read ":hello a") ; => [:hello [\space \a]]
+  (read "-123 a") ; => [-123 [\space \a]]
+  (read "-.1 a") ; => [-0.1 [\space \a]]
+
+  (read "-hello a") ; => ['-hello [\space \a]]
+  (read "--> a") ; => ['--> [\space \a]]
+  )
+
+(defmethod read \' [s]
+  (let [[data s] (read (rest s))]
+    [(->quote data) s]))
+
+(defmethod read \` [s]
+  (let [[data s] (read (rest s))]
+    [(->backquote data) s]))
+
+(comment
+  (read "'hello a") ; => [{:data 'hello} [\space \a]]
   )
