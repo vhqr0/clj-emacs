@@ -142,7 +142,7 @@
 
 (defn package-raw-info
   [text]
-  (let [lines (->> text str/split-lines (remove str/blank?))]
+  (let [lines (str/split-lines text)]
     (if-let [{:keys [name desc local-vars]} (some-> (first lines) first-line-info)]
       (let [lines (rest lines)
             [header-lines lines] (->> lines (split-with #(nil? (re-matches comment-line-re %))))]
@@ -151,7 +151,11 @@
                 lines (rest lines)
                 [comment-lines lines] (->> lines (split-with #(nil? (re-matches code-line-re %))))]
             (if (seq lines)
-              (let [comment (str/join \newline comment-lines)]
+              (let [comment (->> comment-lines
+                                 (map #(cond-> % (str/starts-with? % ";;") (subs 2)))
+                                 (map str/trim)
+                                 (str/join \newline)
+                                 str/trim)]
                 {:name name :desc desc :local-vars local-vars :headers headers :comment comment})
               (throw (ex-info "未找到代码行" {:reason ::code-line-not-found}))))
           (throw (ex-info "未找到注释行" {:reason ::comment-line-not-found}))))
@@ -159,8 +163,7 @@
 
 (comment
   (def test-package
-    "
-;;; package.el --- Simple package system for Emacs  -*- lexical-binding:t -*-
+    ";;; package.el --- Simple package system for Emacs  -*- lexical-binding:t -*-
 
 ;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
@@ -189,12 +192,12 @@
 
   (package-raw-info test-package)
   ;; =>
-  {:name "package",
-   :desc "Simple package system for Emacs",
-   :local-vars "-*- lexical-binding:t -*-",
-   :headers {"package-requires" ["((tabulated-list \"1.0\"))"],
-             "keywords" ["tools"],
-             "version" ["1.1.0"],
-             "created" ["10 Mar 2007"],
-             "author" ["Tom Tromey <tromey@redhat.com>" "Daniel Hackney <dan@haxney.org>"]},
-   :comment ";; The idea behind package.el is to be able to download packages and\n;; install them.  Packages are versioned and have versioned\n;; dependencies.  Furthermore, this supports built-in packages which\n;; may or may not be newer than user-specified packages.  This makes\n;; it possible to upgrade Emacs and automatically disable packages\n;; which have moved from external to core.  (Note though that we don't\n;; currently register any of these, so this feature does not actually\n;; work.)"})
+  {:name "package"
+   :desc "Simple package system for Emacs"
+   :local-vars "-*- lexical-binding:t -*-"
+   :headers {"package-requires" ["((tabulated-list \"1.0\"))"]
+             "keywords" ["tools"]
+             "version" ["1.1.0"]
+             "created" ["10 Mar 2007"]
+             "author" ["Tom Tromey <tromey@redhat.com>" "Daniel Hackney <dan@haxney.org>"]}
+   :comment "The idea behind package.el is to be able to download packages and\ninstall them.  Packages are versioned and have versioned\ndependencies.  Furthermore this supports built-in packages which\nmay or may not be newer than user-specified packages.  This makes\nit possible to upgrade Emacs and automatically disable packages\nwhich have moved from external to core.  (Note though that we don't\ncurrently register any of these so this feature does not actually\nwork.)"})
