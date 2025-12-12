@@ -10,8 +10,8 @@
   #"^;; ([^ \t]+)[ \t]*:[ \t]*(.*?)[ \t]*$")
 
 (def header-continue-line-re
-  ;; value
-  #"^;;  [ \t]*(.*?)[ \t]*$")
+  ;; tab value
+  #"^;;(  |\t)[ \t]*(.*?)[ \t]*$")
 
 (defn parse-headers
   [lines]
@@ -27,7 +27,7 @@
         (let [[values lines] (loop [values [value] lines (rest lines)]
                                (if (empty? lines)
                                  [values lines]
-                                 (if-let [[_ value] (re-matches header-continue-line-re (first lines))]
+                                 (if-let [[_ _ value] (re-matches header-continue-line-re (first lines))]
                                    (recur (conj values value) (rest lines))
                                    [values lines])))]
           (recur (conj acc [key values]) lines))

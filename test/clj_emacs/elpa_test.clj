@@ -98,6 +98,7 @@
           "Tom Tromey <tromey@redhat.com>"]
          (re-matches elpa/header-line-re test-header-line)))
   (is (= [test-header-continue-line
+          "  "
           "Daniel Hackney <dan@haxney.org>"]
          (re-matches elpa/header-continue-line-re test-header-continue-line)))
   (is (= {"package-requires" ["((tabulated-list \" 1.0 \"))"]
