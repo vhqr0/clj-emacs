@@ -139,4 +139,8 @@
                     "created" ["10 Mar 2007"]
                     "author" ["Tom Tromey <tromey@redhat.com>" "Daniel Hackney <dan@haxney.org>"]}
           :comment "The idea behind package.el is to be able to download packages and\ninstall them.  Packages are versioned and have versioned\ndependencies.  Furthermore, this supports built-in packages which\nmay or may not be newer than user-specified packages.  This makes\nit possible to upgrade Emacs and automatically disable packages\nwhich have moved from external to core.  (Note though that we don't\ncurrently register any of these, so this feature does not actually\nwork.)"}
-         (elpa/parse-package (rest (str/split-lines test-package-text))))))
+         (elpa/parse-package (rest (str/split-lines test-package-text)))))
+  (is (= [{:name "Tom Tromey" :email "tromey@redhat.com"} {:name "Daniel Hackney" :email "dan@haxney.org"}]
+         (elpa/parse-persons ["Tom Tromey <tromey@redhat.com>" "Daniel Hackney <dan@haxney.org>"])))
+  (is (= ["git" "tools" "vc"]
+         (elpa/parse-keywords ["git tools" "vc"]))))

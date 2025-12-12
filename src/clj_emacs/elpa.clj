@@ -1,5 +1,6 @@
 (ns clj-emacs.elpa
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clj-emacs.eld :as eld]))
 
 (def first-line-re
   ;; name desc local-vars
@@ -62,3 +63,22 @@
             (throw (ex-info "未找到代码行" {:reason ::code-line-not-found}))))
         (throw (ex-info "未找到注释行" {:reason ::comment-line-not-found}))))
     (throw (ex-info "首行错误" {:reason ::first-line-not-match}))))
+
+(def person-line-re
+  #"^[ \t]*(.*?)[ \t]*<(.*)>$")
+
+(defn parse-persons
+  [lines]
+  (->> lines
+       (keep
+        (fn [line]
+          (when-let [[_ name email] (re-matches person-line-re line)]
+            {:name name :email email})))))
+
+(defn parse-keywords
+  [lines]
+  (str/split (str/join \space lines) #"[ \t]+"))
+
+(defn parse-requires
+  [lines]
+  (eld/eld->clj (str/join \space lines)))
