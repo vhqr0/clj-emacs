@@ -115,10 +115,10 @@
   (fn [s] (first s)))
 
 (defmethod read :default [s]
-  (throw (ex-info "ELD 语法错误：未知语法" {:reason ::unknown-syntax :char (first s)})))
+  (throw (ex-info "syntax error: unknown syntax" {:reason ::unknown-syntax :char (first s)})))
 
 (defmethod read nil [s]
-  (throw (ex-info "空字符串" {:reason ::end-of-data})))
+  (throw (ex-info "syntax error: read end of data" {:reason ::read-end-of-data})))
 
 (def whitespace-chars
   #{\space \tab \formfeed \return \newline})
@@ -162,11 +162,11 @@
   [s]
   (loop [acc [] s s]
     (let [c (first s)]
-      (cond (nil? c) (throw (ex-info "ELD 语法错误：未关闭字符串" {:reason ::unclosed-string}))
+      (cond (nil? c) (throw (ex-info "syntax error: unclosed string" {:reason ::unclosed-string}))
             (= c \") [(join-chars acc) (rest s)]
             (= c \\) (let [s (rest s)
                            c (first s)]
-                       (cond (nil? c) (throw (ex-info "ELD 语法错误：未关闭字符串" {:reason ::unclosed-string}))
+                       (cond (nil? c) (throw (ex-info "syntax error: unclosed string" {:reason ::unclosed-string}))
                              (= c \") (recur (conj acc \") (rest s))
                              (= c \\) (recur (conj acc \\) (rest s))
                              (= c \b) (recur (conj acc \backspace) (rest s))
@@ -209,7 +209,7 @@
 (defmethod read \: [s]
   (let [[sym s] (read-symbol (rest s))]
     (when (empty? sym)
-      (throw (ex-info "ELD 语法错误：空关键字" {:reason ::empty-keyword})))
+      (throw (ex-info "syntax error: empty keyword" {:reason ::empty-keyword})))
     [(keyword sym) s]))
 
 (defn read-number
@@ -220,7 +220,7 @@
                     (recur (+ (* 10 i) n) (rest s))
                     (if (or (= \. c) (not (contains? symbol-continue-chars c)))
                       [i s]
-                      (throw (ex-info "ELD 语法错误：未结束数字" {:reason ::unfinished-number}))))))]
+                      (throw (ex-info "syntax error: unfinished number" {:reason ::unfinished-number}))))))]
     (if-not (= \. (first s))
       [i s]
       (let [s (rest s)
@@ -230,7 +230,7 @@
                         (recur (+ f (* base n)) (* 0.1 base) (rest s))
                         (if-not (contains? symbol-continue-chars c)
                           [f s]
-                          (throw (ex-info "ELD 语法错误：未结束数字" {:reason ::unfinished-number}))))))]
+                          (throw (ex-info "syntax error: unfinished number" {:reason ::unfinished-number}))))))]
         [(+ i f) s]))))
 
 (doseq [c (keys num-map)]
@@ -239,7 +239,7 @@
 
 (defmethod read \. [s]
   (when-not (contains? num-map (second s))
-    (throw (ex-info "ELD 语法错误：单独的点" {:reason ::single-dot})))
+    (throw (ex-info "syntax error: single dot" {:reason ::single-dot})))
   (read-number s))
 
 (defmethod read \- [s]
@@ -285,7 +285,7 @@
   (loop [acc [] s (skip-whitespace-and-comment (rest s))]
     (let [c (first s)]
       (if (nil? s)
-        (throw (ex-info "ELD 语法错误：未关闭向量" {:reason ::unclosed-vector}))
+        (throw (ex-info "syntax error: unclosed vector" {:reason ::unclosed-vector}))
         (if (= \] c)
           [acc (rest s)]
           (let [[data s] (read s)]
@@ -295,14 +295,14 @@
   (loop [acc [] s (skip-whitespace-and-comment (rest s))]
     (let [c (first s)]
       (if (nil? s)
-        (throw (ex-info "ELD 语法错误：未关闭列表" {:reason ::unclosed-list}))
+        (throw (ex-info "syntax error: unclosed list" {:reason ::unclosed-list}))
         (if (= \) c)
           [(seq->cons acc) (rest s)]
           (if (and (= \. c) (not (contains? symbol-continue-chars (second s))))
             (let [[last s] (read (rest s))
                   s (skip-whitespace-and-comment s)]
               (when-not (= \) (first s))
-                (throw (ex-info "ELD 语法错误：未关闭列表" {:reason ::unclosed-list})))
+                (throw (ex-info "syntax error: unclosed list" {:reason ::unclosed-list})))
               [(seq->cons acc last) (rest s)])
             (let [[data s] (read s)]
               (recur (conj acc data) (skip-whitespace-and-comment s)))))))))
@@ -319,5 +319,5 @@
   (let [[data s] (read s)
         s (skip-whitespace-and-comment s)]
     (when (seq s)
-      (throw (ex-info "ELD 数据错误：未完全读取" {:reason ::unfinished-parse})))
+      (throw (ex-info "read unfinished parse" {:reason ::read-unfinished-parse})))
     data))

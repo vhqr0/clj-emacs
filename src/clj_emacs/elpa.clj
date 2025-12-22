@@ -60,9 +60,9 @@
           (if (seq lines)
             (let [comment (join-comment comment-lines)]
               {:name name :desc desc :local-vars local-vars :headers headers :comment comment})
-            (throw (ex-info "未找到代码行" {:reason ::code-line-not-found}))))
-        (throw (ex-info "未找到注释行" {:reason ::comment-line-not-found}))))
-    (throw (ex-info "首行错误" {:reason ::first-line-not-match}))))
+            (throw (ex-info "code line not found" {:reason ::code-line-not-found}))))
+        (throw (ex-info "comment line not found" {:reason ::comment-line-not-found}))))
+    (throw (ex-info "first line not match" {:reason ::first-line-not-match}))))
 
 (defn parse-simple-text
   [lines]
