@@ -100,11 +100,11 @@
 
   Quote
   (clj->eld [data]
-    (str \' (clj->eld data)))
+    (str \' (clj->eld (:data data))))
 
   BackQuote
   (clj->eld [data]
-    (str \` (clj->eld data))))
+    (str \` (clj->eld (:data data)))))
 
 (comment
   (clj->eld ['(1 2 hello) :world (->cons 1 (->cons 2 (->cons 3 'hello))) (->cons (->cons 'a 1) (->cons (->cons 'b 2) nil))])

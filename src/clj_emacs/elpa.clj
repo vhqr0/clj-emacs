@@ -64,17 +64,9 @@
         (throw (ex-info "未找到注释行" {:reason ::comment-line-not-found}))))
     (throw (ex-info "首行错误" {:reason ::first-line-not-match}))))
 
-(def person-line-re
-  #"^[ \t]*(.*?)[ \t]*<(.*)>$")
-
-(defn parse-persons
+(defn parse-simple-text
   [lines]
-  (->> lines
-       (keep
-        (fn [line]
-          (when-let [[_ name address] (re-matches person-line-re line)]
-            {:name name :address address})))
-       vec))
+  (str/trim (apply str lines)))
 
 (defn parse-requires
   [lines]
@@ -89,19 +81,68 @@
   [lines]
   (str/split (str/join \space lines) #"[ \t]+"))
 
+(def person-line-re
+  #"^[ \t]*(.*?)[ \t]*<(.*)>$")
+
+(defn parse-persons
+  [lines]
+  (->> lines
+       (keep
+        (fn [line]
+          (when-let [[_ name address] (re-matches person-line-re line)]
+            {:name name :address address})))
+       vec))
+
 (defn expand-package-info
   [{:keys [headers] :as info}]
   (merge
    info
-   (when-let [lines (or (get headers "version") (get headers "package-version"))]
-     {:version (str/trim (apply str lines))})
+   (when-let [version (or (get headers "version") (get headers "package-version"))]
+     {:version (parse-simple-text version)})
    (when-let [requires (or (get headers "requires") (get headers "package-requires"))]
      {:requires (parse-requires requires)})
    (when-let [keywords (get headers "keywords")]
      {:keywords (parse-keywords keywords)})
-   (when-let [lines (or (get headers "url") (get headers "homepage"))]
-     {:url (str/trim (apply str lines))})
+   (when-let [url (or (get headers "url") (get headers "homepage"))]
+     {:url (parse-simple-text url)})
    (when-let [authors (get headers "author")]
      {:authors (parse-persons authors)})
    (when-let [maintainers (get headers "maintainer")]
      {:maintainers (parse-persons maintainers)})))
+
+(defn requires->define-data
+  [requires]
+  (->> requires
+       (map
+        (fn [{:keys [name version]}]
+          (eld/seq->cons [(symbol name) version])))
+       eld/seq->cons
+       eld/->quote))
+
+(defn keywords->define-data
+  [keywords]
+  (->> keywords eld/seq->cons eld/->quote))
+
+(defn persons->define-data
+  [persons]
+  (->> persons
+       (map
+        (fn [{:keys [name address]}]
+          (eld/->cons name address)))
+       eld/seq->cons
+       eld/->quote))
+
+(defn package-define-data
+  [{:keys [name version desc requires url keywords authors maintainers]}]
+  (eld/seq->cons
+   (concat
+    ['define-package
+     name version desc (requires->define-data requires)]
+    (when (some? url)
+      [:url url])
+    (when (some? keywords)
+      [:keywords (keywords->define-data keywords)])
+    (when (some? authors)
+      [:authors (persons->define-data authors)])
+    (when-let [maintainers (or maintainers authors)]
+      [:maintainers (persons->define-data maintainers)]))))

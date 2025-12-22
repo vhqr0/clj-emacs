@@ -1,6 +1,7 @@
 (ns clj-emacs.elpa-test
   (:require [clojure.test :refer [deftest is]]
             [clojure.string :as str]
+            [clj-emacs.eld :as eld]
             [clj-emacs.elpa :as elpa]))
 
 (def test-first-line
@@ -152,4 +153,12 @@
          (-> (rest (str/split-lines test-package-text))
              elpa/parse-package
              elpa/expand-package-info
-             (select-keys [:version :requires :keywords :url :authors :maintainers])))))
+             (select-keys [:version :requires :keywords :url :authors :maintainers]))))
+  (is (= (str "(define-package \"package\" \"1.1.0\" \"Simple package system for Emacs\" '((tabulated-list \"1.0\")) :keywords '(\"tools\") "
+              ":authors '((\"Tom Tromey\" . \"tromey@redhat.com\") (\"Daniel Hackney\" . \"dan@haxney.org\")) "
+              ":maintainers '((\"Tom Tromey\" . \"tromey@redhat.com\") (\"Daniel Hackney\" . \"dan@haxney.org\")))")
+         (-> (rest (str/split-lines test-package-text))
+             elpa/parse-package
+             elpa/expand-package-info
+             elpa/package-define-data
+             eld/clj->eld))))
