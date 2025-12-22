@@ -161,4 +161,12 @@
              elpa/parse-package
              elpa/expand-package-info
              elpa/package-define-data
+             eld/clj->eld)))
+  (is (= (str "(package . [(1 1 0) ((tabulated-list (1 0))) \"Simple package system for Emacs\" tar ((:keywords \"tools\") "
+              "(:authors (\"Tom Tromey\" . \"tromey@redhat.com\") (\"Daniel Hackney\" . \"dan@haxney.org\")) "
+              "(:maintainer (\"Tom Tromey\" . \"tromey@redhat.com\") (\"Daniel Hackney\" . \"dan@haxney.org\")))])")
+         (-> (rest (str/split-lines test-package-text))
+             elpa/parse-package
+             elpa/expand-package-info
+             elpa/package-archive-data
              eld/clj->eld))))

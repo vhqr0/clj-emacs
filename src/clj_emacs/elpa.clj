@@ -146,3 +146,44 @@
       [:authors (persons->define-data authors)])
     (when-let [maintainers (or maintainers authors)]
       [:maintainers (persons->define-data maintainers)]))))
+
+(defn version->archive-data
+  [version]
+  (->> (str/split version #"\.")
+       (map parse-long)
+       eld/seq->cons))
+
+(defn requires->archive-data
+  [requires]
+  (->> requires
+       (map
+        (fn [{:keys [name version]}]
+          (eld/seq->cons [(symbol name) (version->archive-data version)])))
+       eld/seq->cons))
+
+(defn persons->archive-data
+  [persons]
+  (->> persons
+       (map
+        (fn [{:keys [name address]}]
+          (eld/->cons name address)))
+       eld/seq->cons))
+
+(defn package-archive-data
+  [{:keys [name version desc requires url keywords authors maintainers]}]
+  (eld/->cons
+   (symbol name)
+   [(version->archive-data version)
+    (requires->archive-data requires)
+    desc
+    'tar
+    (eld/seq->cons
+     (concat
+      (when (some? keywords)
+        [(eld/->cons :keywords (eld/seq->cons keywords))])
+      (when (some? url)
+        [(eld/->cons :url url)])
+      (when (some? authors)
+        [(eld/->cons :authors (persons->archive-data authors))])
+      (when-let [maintainers (or maintainers authors)]
+        [(eld/->cons :maintainer (persons->archive-data maintainers))])))]))
