@@ -22,18 +22,28 @@
 (defn ->quote [data] (->Quote data))
 (defn ->backquote [data] (->BackQuote data))
 
-(defn ->conlist
+(defn seq->cons
   [s & [last]]
-  (let [s (reverse s)]
-    (->> (rest s)
-         (reduce
-          (fn [cdr car]
-            (->cons car cdr))
-          (->cons (first s) last)))))
+  (when (seq s)
+    (let [s (reverse s)]
+      (->> (rest s)
+           (reduce
+            (fn [cdr car]
+              (->cons car cdr))
+            (->cons (first s) last))))))
+
+(defn cons->seq
+  [cons]
+  (when (some? cons)
+    (lazy-seq
+     (clojure.core/cons
+      (:car cons) (cons->seq (:cdr cons))))))
 
 (comment
-  (->conlist [1 2 3]) ; => {:car 1 :cdr {:car 2 :cdr {:car 3 :cdr nil}}}
-  (->conlist [1 2 3] 4) ; => {:car 1 :cdr {:car 2 :cdr {:car 3 :cdr 4}}}
+  (seq->cons []) ; => nil
+  (seq->cons [1 2 3]) ; => {:car 1 :cdr {:car 2 :cdr {:car 3 :cdr nil}}}
+  (seq->cons [1 2 3] 4) ; => {:car 1 :cdr {:car 2 :cdr {:car 3 :cdr 4}}}
+  (cons->seq (seq->cons [1 2 3])) ; => [1 2 3]
   )
 
 (defprotocol ElispData
@@ -287,13 +297,13 @@
       (if (nil? s)
         (throw (ex-info "ELD 语法错误：未关闭列表" {:reason ::unclosed-list}))
         (if (= \) c)
-          [(->conlist acc) (rest s)]
+          [(seq->cons acc) (rest s)]
           (if (and (= \. c) (not (contains? symbol-continue-chars (second s))))
             (let [[last s] (read (rest s))
                   s (skip-whitespace-and-comment s)]
               (when-not (= \) (first s))
                 (throw (ex-info "ELD 语法错误：未关闭列表" {:reason ::unclosed-list})))
-              [(->conlist acc last) (rest s)])
+              [(seq->cons acc last) (rest s)])
             (let [[data s] (read s)]
               (recur (conj acc data) (skip-whitespace-and-comment s)))))))))
 

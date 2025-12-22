@@ -72,13 +72,36 @@
   (->> lines
        (keep
         (fn [line]
-          (when-let [[_ name email] (re-matches person-line-re line)]
-            {:name name :email email})))))
+          (when-let [[_ name address] (re-matches person-line-re line)]
+            {:name name :address address})))
+       vec))
+
+(defn parse-requires
+  [lines]
+  (->> (eld/eld->clj (str/join \space lines))
+       eld/cons->seq
+       (mapv
+        (fn [cons]
+          (let [[name version] (eld/cons->seq cons)]
+            {:name (clojure.core/name name) :version version})))))
 
 (defn parse-keywords
   [lines]
   (str/split (str/join \space lines) #"[ \t]+"))
 
-(defn parse-requires
-  [lines]
-  (eld/eld->clj (str/join \space lines)))
+(defn expand-package-info
+  [{:keys [headers] :as info}]
+  (merge
+   info
+   (when-let [lines (or (get headers "version") (get headers "package-version"))]
+     {:version (str/trim (apply str lines))})
+   (when-let [requires (or (get headers "requires") (get headers "package-requires"))]
+     {:requires (parse-requires requires)})
+   (when-let [keywords (get headers "keywords")]
+     {:keywords (parse-keywords keywords)})
+   (when-let [lines (or (get headers "url") (get headers "homepage"))]
+     {:url (str/trim (apply str lines))})
+   (when-let [authors (get headers "author")]
+     {:authors (parse-persons authors)})
+   (when-let [maintainers (get headers "maintainer")]
+     {:maintainers (parse-persons maintainers)})))

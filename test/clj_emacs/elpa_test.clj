@@ -140,7 +140,16 @@
                     "author" ["Tom Tromey <tromey@redhat.com>" "Daniel Hackney <dan@haxney.org>"]}
           :comment "The idea behind package.el is to be able to download packages and\ninstall them.  Packages are versioned and have versioned\ndependencies.  Furthermore, this supports built-in packages which\nmay or may not be newer than user-specified packages.  This makes\nit possible to upgrade Emacs and automatically disable packages\nwhich have moved from external to core.  (Note though that we don't\ncurrently register any of these, so this feature does not actually\nwork.)"}
          (elpa/parse-package (rest (str/split-lines test-package-text)))))
-  (is (= [{:name "Tom Tromey" :email "tromey@redhat.com"} {:name "Daniel Hackney" :email "dan@haxney.org"}]
+  (is (= [{:name "Tom Tromey" :address "tromey@redhat.com"} {:name "Daniel Hackney" :address "dan@haxney.org"}]
          (elpa/parse-persons ["Tom Tromey <tromey@redhat.com>" "Daniel Hackney <dan@haxney.org>"])))
   (is (= ["git" "tools" "vc"]
-         (elpa/parse-keywords ["git tools" "vc"]))))
+         (elpa/parse-keywords ["git tools" "vc"])))
+  (is (= {:version "1.1.0"
+          :requires [{:name "tabulated-list" :version "1.0"}]
+          :keywords ["tools"]
+          :authors [{:name "Tom Tromey" :address "tromey@redhat.com"}
+                    {:name "Daniel Hackney" :address "dan@haxney.org"}]}
+         (-> (rest (str/split-lines test-package-text))
+             elpa/parse-package
+             elpa/expand-package-info
+             (select-keys [:version :requires :keywords :url :authors :maintainers])))))
