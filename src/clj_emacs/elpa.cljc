@@ -147,6 +147,12 @@
     (when-let [maintainers (or maintainers authors)]
       [:maintainers (persons->define-data maintainers)]))))
 
+(defn package-define-text
+  [info]
+  (str
+   ";; -*- no-byte-compile: t; lexical-binding: nil -*-\n"
+   (-> info package-define-data eld/clj->eld)))
+
 (defn version->archive-data
   [version]
   (->> (str/split version #"\.")
@@ -187,3 +193,7 @@
         [(eld/->cons :authors (persons->archive-data authors))])
       (when-let [maintainers (or maintainers authors)]
         [(eld/->cons :maintainer (persons->archive-data maintainers))])))]))
+
+(defn package-archive-text
+  [info]
+  (-> info package-archive-data eld/clj->eld))

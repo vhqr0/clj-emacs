@@ -39,13 +39,8 @@
         deps-file (file project-dir deps-path)]
     (merge
      opts
-     (when (.exists deps-file) (-> deps-file slurp edn/read-string))
-     {:project-dir project-dir :uuid (random-uuid)})))
-
-(defn tmp-dir
-  ^File [basis]
-  (let [{:keys [uuid]} basis]
-    (File. (System/getProperty "java.io.tmpdir") (str "elpa-" uuid))))
+     (when (file-exists? deps-file) (-> deps-file slurp edn/read-string))
+     {:project-dir project-dir})))
 
 (defn archive-dir
   ^File [basis]
@@ -75,36 +70,32 @@
                                elpa/parse-package
                                elpa/expand-package-info)
              package-version (:version package-info)
-             package-define-data (str ";; -*- no-byte-compile: t; lexical-binding: nil -*-\n"
-                                      (-> package-info elpa/package-define-data eld/clj->eld))
-             package-archive-data (-> package-info elpa/package-archive-data eld/clj->eld)
-             tmp-dir (tmp-dir basis)
+             package-name-version (str package-name \- package-version)
+             package-define-text (str (elpa/package-define-text package-info))
+             package-archive-text (str (elpa/package-archive-text package-info))
              archive-dir (archive-dir basis)
-             tmp-package-dir (file tmp-dir (str package-name \- package-version))
-             tmp-package-meta-file (file tmp-package-dir (str package-name "-pkg.el"))
-             archive-package-file (file archive-dir (str package-name \- package-version ".tar"))
-             archive-package-meta-file (file archive-dir (str package-name \- package-version ".eld"))]
-         ;; make sure dirs were created
-         (.mkdirs tmp-package-dir)
+             archive-package-tar-file (file archive-dir (str package-name-version ".tar"))
+             archive-package-meta-file (file archive-dir (str package-name-version ".eld"))]
          (.mkdirs archive-dir)
-         ;; write meta data first
-         (spit archive-package-meta-file package-archive-data)
-         (spit tmp-package-meta-file package-define-data)
-         ;; copy package files to tmp dir
-         (if-not package-dir?
-           (io/copy package-file (file tmp-package-dir (str package-name ".el")))
-           (doseq [^File package-sub-file (.listFiles package-file)]
-             (let [package-sub-path (.getName package-sub-file)]
-               (when (str/ends-with? package-sub-path ".el")
-                 (io/copy package-sub-file (file tmp-package-dir package-sub-path))))))
-         ;; tar tmp dir to archive file
-         (with-open [fos (io/output-stream archive-package-file)
+         (spit archive-package-meta-file package-archive-text)
+         (with-open [fos (io/output-stream archive-package-tar-file)
                      tos (TarArchiveOutputStream. fos)]
-           (let [prefix (str package-name \- package-version \/)]
-             (doseq [^File archive-sub-file (.listFiles tmp-package-dir)]
-               (let [entry (.createArchiveEntry tos archive-sub-file (str prefix (.getName archive-sub-file)))]
-                 (.putArchiveEntry tos entry)
-                 (with-open [fis (io/input-stream archive-sub-file)]
-                   (io/copy fis tos))
-                 (.closeArchiveEntry tos)))
-             (.finish tos))))))))
+           (if-not package-dir?
+             (let [entry (.createArchiveEntry tos package-file (str package-name-version \/ package-name ".el"))]
+               (.putArchiveEntry tos entry)
+               (io/copy package-file tos)
+               (.closeArchiveEntry tos))
+             (doseq [^File package-sub-file (.listFiles package-file)]
+               (let [package-sub-file-name (.getName package-sub-file)]
+                 (when (str/ends-with? package-sub-file-name ".el")
+                   (let [entry (.createArchiveEntry tos package-sub-file (str package-name-version \/ package-sub-file-name))]
+                     (.putArchiveEntry tos entry)
+                     (io/copy package-sub-file tos)
+                     (.closeArchiveEntry tos))))))
+           (let [data (.getBytes package-define-text)
+                 entry (TarArchiveEntry. (str package-name-version \/ package-name "-pkg.el"))]
+             (.setSize entry (alength data))
+             (.putArchiveEntry tos entry)
+             (.write tos data)
+             (.closeArchiveEntry tos))
+           (.finish tos)))))))
