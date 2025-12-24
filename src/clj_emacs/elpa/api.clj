@@ -120,13 +120,15 @@
       (.write writer ")"))))
 
 (defn update-package
-  ([basis]
-   (let [packages (keys (:deps basis))]
-     (doseq [package packages]
-       (delete-package basis package)
-       (archive-package basis package))
-     (generate-index basis)))
-  ([basis package]
-   (delete-package basis package)
-   (archive-package basis package)
-   (generate-index basis)))
+  [basis package]
+  (delete-package basis package)
+  (archive-package basis package)
+  (generate-index basis))
+
+(defn update-packages
+  [basis]
+  (let [packages (keys (:deps basis))]
+    (doseq [package packages]
+      (delete-package basis package)
+      (archive-package basis package))
+    (generate-index basis)))
