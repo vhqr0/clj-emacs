@@ -1,4 +1,4 @@
-(ns clj-emacs.elpa.tool
+(ns clj-emacs.elpa.api
   (:require [clojure.string :as str]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -19,6 +19,10 @@
    :deps-path "elpa.deps.edn"
    :archive-path "archive"})
 
+(defn file
+  (^File [^String path] (File. path))
+  (^File [^File dir ^String path] (File. dir path)))
+
 (defn create-basis
   [opts]
   (let [{:keys [project-path deps-path] :as opts} (merge default-opts opts)
@@ -28,10 +32,6 @@
      opts
      (when (.exists deps-file) (-> deps-file slurp edn/read-string))
      {:project-dir project-dir})))
-
-(defn file
-  (^File [^String path] (File. path))
-  (^File [^File dir ^String path] (File. dir path)))
 
 (defn archive-dir
   ^File [basis]
