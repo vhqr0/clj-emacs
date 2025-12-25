@@ -71,7 +71,7 @@
     (pr-str data))
 
   java.lang.Double
-  (clj->edn [data]
+  (clj->eld [data]
     (pr-str data))
 
   java.lang.String
@@ -117,7 +117,7 @@
 (defmethod read :default [s]
   (throw (ex-info "syntax error: unknown syntax" {:reason ::unknown-syntax :char (first s)})))
 
-(defmethod read nil [s]
+(defmethod read nil [_s]
   (throw (ex-info "syntax error: read end of data" {:reason ::read-end-of-data})))
 
 (def whitespace-chars

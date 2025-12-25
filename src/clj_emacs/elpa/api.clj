@@ -46,22 +46,16 @@
     (->file project-dir archive-path)))
 
 (defn- get-archive-files
-  [basis]
-  (let [archive-dir (get-archive-dir basis)]
-    (when (.isDirectory archive-dir)
-      (->> (.listFiles archive-dir)
-           (keep
-            (fn [^File file]
-              (when-let [[_ name version ext] (re-matches archive-name-re (.getName file))]
-                {:file file :name name :version version :ext ext})))))))
-
-(defn- get-tar-files
-  [basis]
-  (->> (get-archive-files basis) (filter #(= "tar" (:ext %)))))
-
-(defn get-meta-files
-  [basis]
-  (->> (get-archive-files basis) (filter #(= "eld" (:ext %)))))
+  ([basis]
+   (let [archive-dir (get-archive-dir basis)]
+     (when (.isDirectory archive-dir)
+       (->> (.listFiles archive-dir)
+            (keep
+             (fn [^File file]
+               (when-let [[_ name version ext] (re-matches archive-name-re (.getName file))]
+                 {:file file :name name :version version :ext ext})))))))
+  ([basis ext]
+   (->> (get-archive-files basis) (filter #(= ext (:ext %))))))
 
 (defn- get-package-file
   ^File [basis package]
@@ -157,7 +151,7 @@
     (.mkdirs archive-dir)
     (with-open [writer (io/writer (->file archive-dir "archive-contents"))]
       (.write writer "(1")
-      (doseq [{:keys [file ext]} (get-meta-files basis)]
+      (doseq [{:keys [file]} (get-archive-files basis "eld")]
         (.write writer "\n")
         (io/copy file writer))
       (.write writer ")"))))
