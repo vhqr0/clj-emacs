@@ -30,15 +30,20 @@
   (^File [^String path] (File. path))
   (^File [^File dir ^String path] (File. dir path)))
 
+(defn- slurp-deps-file
+  [^File project-dir deps-path]
+  (when (some? deps-path)
+    (let [deps-file (->file project-dir deps-path)]
+      (when (.isFile deps-file)
+        (-> deps-file slurp edn/read-string)))))
+
 (defn ^:api create-basis
   [opts]
   (let [{:keys [project-path deps-path] :as opts} (merge default-opts opts)
-        project-dir (.getCanonicalFile (->file project-path))
-        deps (when (some? deps-path)
-               (let [deps-file (->file project-dir deps-path)]
-                 (when (.isFile deps-file)
-                   (-> deps-file slurp edn/read-string))))]
-    (merge opts deps {:project-dir project-dir})))
+        project-dir (.getCanonicalFile (->file project-path))]
+    (merge opts
+           (slurp-deps-file project-dir deps-path)
+           {:project-dir project-dir})))
 
 (defn- get-archive-dir
   ^File [basis]
@@ -87,14 +92,14 @@
    (->file archive-dir (str name \- version ".eld"))
    (elpa/package-archive-text info)))
 
-(defn- tar-archive-spit-file
+(defn- tar-spit-file
   [^TarArchiveOutputStream tos ^File file ^String name]
   (let [entry (.createArchiveEntry tos file name)]
     (.putArchiveEntry tos entry)
     (io/copy file tos)
     (.closeArchiveEntry tos)))
 
-(defn- tar-archive-spit-data
+(defn- tar-spit-data
   [^TarArchiveOutputStream tos ^bytes data ^String name]
   (let [entry (TarArchiveEntry. name)]
     (.setSize entry (alength data))
@@ -102,29 +107,29 @@
     (.write tos data)
     (.closeArchiveEntry tos)))
 
-(defn- tar-archive-spit-pacakge-files
+(defn- tar-spit-pacakge-files
   [^TarArchiveOutputStream tos ^File file name version]
   (if-not (.isDirectory file)
     (let [entry (str name \- version \/ name ".el")]
-      (tar-archive-spit-file tos file entry))
+      (tar-spit-file tos file entry))
     (doseq [^File sub-file (.listFiles file)]
       (let [sub-file-name (.getName sub-file)]
         (when (str/ends-with? sub-file-name ".el")
           (let [entry (str name \- version \/ sub-file-name)]
-            (tar-archive-spit-file tos sub-file entry)))))))
+            (tar-spit-file tos sub-file entry)))))))
 
-(defn- tar-archive-spit-package-meta-file
+(defn- tar-spit-package-meta-file
   [^TarArchiveOutputStream tos info name version]
   (let [data (.getBytes ^String (elpa/package-define-text info))
         entry (str name \- version \/ name "-pkg.el")]
-    (tar-archive-spit-data tos data entry)))
+    (tar-spit-data tos data entry)))
 
 (defn- spit-package-tar
   [^File archive-dir ^File file info name version]
   (with-open [fos (io/output-stream (->file archive-dir (str name \- version ".tar")))
               tos (TarArchiveOutputStream. fos)]
-    (tar-archive-spit-pacakge-files tos file name version)
-    (tar-archive-spit-package-meta-file tos info name version)
+    (tar-spit-pacakge-files tos file name version)
+    (tar-spit-package-meta-file tos info name version)
     (.finish tos)))
 
 (defn- spit-archive-files
