@@ -45,7 +45,7 @@
   (let [{:keys [project-dir archive-path]} basis]
     (->file project-dir archive-path)))
 
-(defn- list-archive-files
+(defn- get-archive-files
   [basis]
   (let [archive-dir (get-archive-dir basis)]
     (when (.isDirectory archive-dir)
@@ -55,13 +55,13 @@
               (when-let [[_ name version ext] (re-matches archive-name-re (.getName file))]
                 {:file file :name name :version version :ext ext})))))))
 
-(defn- list-tar-files
+(defn- get-tar-files
   [basis]
-  (->> (list-archive-files basis) (filter #(= "tar" (:ext %)))))
+  (->> (get-archive-files basis) (filter #(= "tar" (:ext %)))))
 
-(defn list-meta-files
+(defn get-meta-files
   [basis]
-  (->> (list-archive-files basis) (filter #(= "eld" (:ext %)))))
+  (->> (get-archive-files basis) (filter #(= "eld" (:ext %)))))
 
 (defn- get-package-file
   ^File [basis package]
@@ -93,14 +93,14 @@
    (->file archive-dir (str name \- version ".eld"))
    (elpa/package-archive-text info)))
 
-(defn- tar-archive-add-file
+(defn- tar-archive-spit-file
   [^TarArchiveOutputStream tos ^File file ^String name]
   (let [entry (.createArchiveEntry tos file name)]
     (.putArchiveEntry tos entry)
     (io/copy file tos)
     (.closeArchiveEntry tos)))
 
-(defn- tar-archive-add-data
+(defn- tar-archive-spit-data
   [^TarArchiveOutputStream tos ^bytes data ^String name]
   (let [entry (TarArchiveEntry. name)]
     (.setSize entry (alength data))
@@ -108,29 +108,29 @@
     (.write tos data)
     (.closeArchiveEntry tos)))
 
-(defn- tar-archive-add-pacakge-files
+(defn- tar-archive-spit-pacakge-files
   [^TarArchiveOutputStream tos ^File file name version]
   (if-not (.isDirectory file)
     (let [entry (str name \- version \/ name ".el")]
-      (tar-archive-add-file tos file entry))
+      (tar-archive-spit-file tos file entry))
     (doseq [^File sub-file (.listFiles file)]
       (let [sub-file-name (.getName sub-file)]
         (when (str/ends-with? sub-file-name ".el")
           (let [entry (str name \- version \/ sub-file-name)]
-            (tar-archive-add-file tos sub-file entry)))))))
+            (tar-archive-spit-file tos sub-file entry)))))))
 
-(defn- tar-archive-add-package-meta-file
+(defn- tar-archive-spit-package-meta-file
   [^TarArchiveOutputStream tos info name version]
   (let [data (.getBytes ^String (elpa/package-define-text info))
         entry (str name \- version \/ name "-pkg.el")]
-    (tar-archive-add-data tos data entry)))
+    (tar-archive-spit-data tos data entry)))
 
 (defn- spit-package-tar
   [^File archive-dir ^File file info name version]
   (with-open [fos (io/output-stream (->file archive-dir (str name \- version ".tar")))
               tos (TarArchiveOutputStream. fos)]
-    (tar-archive-add-pacakge-files tos file name version)
-    (tar-archive-add-package-meta-file tos info name version)
+    (tar-archive-spit-pacakge-files tos file name version)
+    (tar-archive-spit-package-meta-file tos info name version)
     (.finish tos)))
 
 (defn- spit-archive-files
@@ -147,7 +147,7 @@
 (defn ^:api delete-package
   [basis package]
   (let [target-name (name package)]
-    (doseq [{:keys [name file]} (list-archive-files basis)]
+    (doseq [{:keys [name file]} (get-archive-files basis)]
       (when (= name target-name)
         (.delete ^File file)))))
 
@@ -157,7 +157,7 @@
     (.mkdirs archive-dir)
     (with-open [writer (io/writer (->file archive-dir "archive-contents"))]
       (.write writer "(1")
-      (doseq [{:keys [file ext]} (list-meta-files basis)]
+      (doseq [{:keys [file ext]} (get-meta-files basis)]
         (.write writer "\n")
         (io/copy file writer))
       (.write writer ")"))))
