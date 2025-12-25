@@ -141,14 +141,16 @@
 (defn ^:api create-package
   [basis package]
   (let [info (get-package-info basis package)]
-    (spit-archive-files (get-archive-dir basis) info)))
+    (spit-archive-files (get-archive-dir basis) info)
+    (println "create package" (:name info) (:version info))))
 
 (defn ^:api delete-package
   [basis package]
   (let [target-name (name package)]
-    (doseq [{:keys [name file]} (get-archive-files basis)]
+    (doseq [{:keys [file name version ext]} (get-archive-files basis)]
       (when (= name target-name)
-        (.delete ^File file)))))
+        (.delete ^File file)
+        (println "delete package" name version ext)))))
 
 (defn ^:api create-index
   [basis]
@@ -159,7 +161,8 @@
       (doseq [{:keys [file]} (get-archive-files basis "eld")]
         (.write writer "\n")
         (io/copy file writer))
-      (.write writer ")"))))
+      (.write writer ")"))
+    (println "create index")))
 
 (defn ^:api update-package
   [basis package]
