@@ -14,121 +14,164 @@
           :package-1 {:path "./package-1.el"}
           :package-2 {:path "./package-2/src"}}})
 
-(def default-opts
+(def ^:private default-opts
   {:project-path "."
    :deps-path "elpa.deps.edn"
    :archive-path "archive"})
 
-(defn file
-  (^File [^String path] (File. path))
-  (^File [^File dir ^String path] (File. dir path)))
-
-(defn create-basis
-  [opts]
-  (let [{:keys [project-path deps-path] :as opts} (merge default-opts opts)
-        project-dir (.getCanonicalFile (file project-path))
-        deps-file (file project-dir deps-path)]
-    (merge
-     opts
-     (when (.exists deps-file) (-> deps-file slurp edn/read-string))
-     {:project-dir project-dir})))
-
-(defn archive-dir
-  ^File [basis]
-  (let [{:keys [project-dir archive-path]} basis]
-    (file project-dir archive-path)))
-
-(defn package-file
-  [basis package]
-  (when-let [{:keys [path]} (get-in basis [:deps package])]
-    (let [{:keys [project-dir]} basis]
-      (file project-dir path))))
-
-(def archive-name-re
+(def ^:private archive-name-re
   #"^(.+)-([0-9.]+)\.(eld|tar)$")
 
 (comment
   (re-matches archive-name-re "package-1.0.0.tar") ; => ["package-1.0.0.tar" "package" "1.0.0" "tar"]
   )
 
-(defn archive-package
-  [basis package]
-  (when-let [^File package-file (package-file basis package)]
-    (when (.exists package-file)
-      (let [package-dir? (.isDirectory package-file)
-            package-name (name package)
-            package-main-file (if-not package-dir?
-                                package-file
-                                (file package-file (str package-name ".el")))
-            package-info (->> package-main-file
-                              slurp
-                              str/split-lines
-                              elpa/parse-package
-                              elpa/expand-package-info)
-            package-version (:version package-info)
-            package-name-version (str package-name \- package-version)
-            package-define-text (str (elpa/package-define-text package-info))
-            package-archive-text (str (elpa/package-archive-text package-info))
-            archive-dir (archive-dir basis)
-            archive-package-tar-file (file archive-dir (str package-name-version ".tar"))
-            archive-package-meta-file (file archive-dir (str package-name-version ".eld"))]
-        (.mkdirs archive-dir)
-        (spit archive-package-meta-file package-archive-text)
-        (with-open [fos (io/output-stream archive-package-tar-file)
-                    tos (TarArchiveOutputStream. fos)]
-          (if-not package-dir?
-            (let [entry (.createArchiveEntry tos package-file (str package-name-version \/ package-name ".el"))]
-              (.putArchiveEntry tos entry)
-              (io/copy package-file tos)
-              (.closeArchiveEntry tos))
-            (doseq [^File package-sub-file (.listFiles package-file)]
-              (let [package-sub-file-name (.getName package-sub-file)]
-                (when (str/ends-with? package-sub-file-name ".el")
-                  (let [entry (.createArchiveEntry tos package-sub-file (str package-name-version \/ package-sub-file-name))]
-                    (.putArchiveEntry tos entry)
-                    (io/copy package-sub-file tos)
-                    (.closeArchiveEntry tos))))))
-          (let [data (.getBytes package-define-text)
-                entry (TarArchiveEntry. (str package-name-version \/ package-name "-pkg.el"))]
-            (.setSize entry (alength data))
-            (.putArchiveEntry tos entry)
-            (.write tos data)
-            (.closeArchiveEntry tos))
-          (.finish tos))))))
+(defn- ->file
+  (^File [^String path] (File. path))
+  (^File [^File dir ^String path] (File. dir path)))
 
-(defn delete-package
-  [basis package]
-  (let [archive-dir (archive-dir basis)]
-    (when (.exists archive-dir)
-      (let [package-name (name package)]
-        (doseq [^File archive-file (.listFiles archive-dir)]
-          (when-let [[_ name _ _] (re-matches archive-name-re (.getName archive-file))]
-            (when (= name package-name)
-              (.delete archive-file))))))))
+(defn ^:api create-basis
+  [opts]
+  (let [{:keys [project-path deps-path] :as opts} (merge default-opts opts)
+        project-dir (.getCanonicalFile (->file project-path))
+        deps (when (some? deps-path)
+               (let [deps-file (->file project-dir deps-path)]
+                 (when (.isFile deps-file)
+                   (-> deps-file slurp edn/read-string))))]
+    (merge opts deps {:project-dir project-dir})))
 
-(defn generate-index
+(defn- get-archive-dir
+  ^File [basis]
+  (let [{:keys [project-dir archive-path]} basis]
+    (->file project-dir archive-path)))
+
+(defn- list-archive-files
   [basis]
-  (let [archive-dir (archive-dir basis)
-        index-file (file archive-dir "archive-contents")]
+  (let [archive-dir (get-archive-dir basis)]
+    (when (.isDirectory archive-dir)
+      (->> (.listFiles archive-dir)
+           (keep
+            (fn [^File file]
+              (when-let [[_ name version ext] (re-matches archive-name-re (.getName file))]
+                {:file file :name name :version version :ext ext})))))))
+
+(defn- list-tar-files
+  [basis]
+  (->> (list-archive-files basis) (filter #(= "tar" (:ext %)))))
+
+(defn list-meta-files
+  [basis]
+  (->> (list-archive-files basis) (filter #(= "eld" (:ext %)))))
+
+(defn- get-package-file
+  ^File [basis package]
+  (if-let [{:keys [path]} (get-in basis [:deps package])]
+    (->file (:project-dir basis) path)
+    (throw (ex-info "no such package" {:reason ::no-such-package}))))
+
+(defn- slurp-package-file
+  [^File file package]
+  (-> (cond-> file
+        (.isDirectory file)
+        (->file (str (name package) ".el")))
+      slurp
+      str/split-lines
+      elpa/parse-package
+      elpa/expand-package-info))
+
+(defn- get-package-info
+  [basis package]
+  (let [file (get-package-file basis package)
+        info (merge (slurp-package-file file package) {:file file})]
+    (if (= (name package) (:name info))
+      info
+      (throw (ex-info "invalid package info" {:reason ::invalid-package-info})))))
+
+(defn- spit-package-meta
+  [^File archive-dir info name version]
+  (spit
+   (->file archive-dir (str name \- version ".eld"))
+   (elpa/package-archive-text info)))
+
+(defn- tar-archive-add-file
+  [^TarArchiveOutputStream tos ^File file ^String name]
+  (let [entry (.createArchiveEntry tos file name)]
+    (.putArchiveEntry tos entry)
+    (io/copy file tos)
+    (.closeArchiveEntry tos)))
+
+(defn- tar-archive-add-data
+  [^TarArchiveOutputStream tos ^bytes data ^String name]
+  (let [entry (TarArchiveEntry. name)]
+    (.setSize entry (alength data))
+    (.putArchiveEntry tos entry)
+    (.write tos data)
+    (.closeArchiveEntry tos)))
+
+(defn- tar-archive-add-pacakge-files
+  [^TarArchiveOutputStream tos ^File file name version]
+  (if-not (.isDirectory file)
+    (let [entry (str name \- version \/ name ".el")]
+      (tar-archive-add-file tos file entry))
+    (doseq [^File sub-file (.listFiles file)]
+      (let [sub-file-name (.getName sub-file)]
+        (when (str/ends-with? sub-file-name ".el")
+          (let [entry (str name \- version \/ sub-file-name)]
+            (tar-archive-add-file tos sub-file entry)))))))
+
+(defn- tar-archive-add-package-meta-file
+  [^TarArchiveOutputStream tos info name version]
+  (let [data (.getBytes ^String (elpa/package-define-text info))
+        entry (str name \- version \/ name "-pkg.el")]
+    (tar-archive-add-data tos data entry)))
+
+(defn- spit-package-tar
+  [^File archive-dir ^File file info name version]
+  (with-open [fos (io/output-stream (->file archive-dir (str name \- version ".tar")))
+              tos (TarArchiveOutputStream. fos)]
+    (tar-archive-add-pacakge-files tos file name version)
+    (tar-archive-add-package-meta-file tos info name version)
+    (.finish tos)))
+
+(defn- spit-archive-files
+  [^File archive-dir {:keys [file name version] :as info}]
+  (.mkdirs archive-dir)
+  (spit-package-meta archive-dir info name version)
+  (spit-package-tar archive-dir file info name version))
+
+(defn ^:api create-package
+  [basis package]
+  (let [info (get-package-info basis package)]
+    (spit-archive-files (get-archive-dir basis) info)))
+
+(defn ^:api delete-package
+  [basis package]
+  (let [target-name (name package)]
+    (doseq [{:keys [name file]} (list-archive-files basis)]
+      (when (= name target-name)
+        (.delete ^File file)))))
+
+(defn ^:api create-index
+  [basis]
+  (let [archive-dir (get-archive-dir basis)]
     (.mkdirs archive-dir)
-    (with-open [writer (io/writer index-file)]
+    (with-open [writer (io/writer (->file archive-dir "archive-contents"))]
       (.write writer "(1")
-      (doseq [^File archive-file (.listFiles archive-dir)]
-        (when (str/ends-with? (.getName archive-file) ".eld")
-          (.write writer "\n")
-          (io/copy archive-file writer)))
+      (doseq [{:keys [file ext]} (list-meta-files basis)]
+        (.write writer "\n")
+        (io/copy file writer))
       (.write writer ")"))))
 
-(defn update-package
+(defn ^:api update-package
   [basis package]
   (delete-package basis package)
-  (archive-package basis package)
-  (generate-index basis))
+  (create-package basis package)
+  (create-index basis))
 
-(defn update-packages
+(defn ^:api update-packages
   [basis]
   (let [packages (keys (:deps basis))]
     (doseq [package packages]
       (delete-package basis package)
-      (archive-package basis package))
-    (generate-index basis)))
+      (create-package basis package))
+    (create-index basis)))

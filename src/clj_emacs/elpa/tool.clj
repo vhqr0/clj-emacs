@@ -1,17 +1,22 @@
 (ns clj-emacs.elpa.tool
+  (:refer-clojure :exclude [update])
   (:require [clj-emacs.elpa.api :as api]))
 
-(defn archive-package
+(defn basis
   [opts]
-  (api/archive-package (api/create-basis opts) (:package opts)))
+  (prn (-> (api/create-basis opts) (dissoc :project-dir))))
+
+(defn create-package
+  [opts]
+  (api/create-package (api/create-basis opts) (:package opts)))
 
 (defn delete-package
   [opts]
   (api/delete-package (api/create-basis opts) (:package opts)))
 
-(defn generate-index
+(defn create-index
   [opts]
-  (api/generate-index (api/create-basis opts)))
+  (api/create-index (api/create-basis opts)))
 
 (defn update-package
   [opts]
@@ -20,3 +25,9 @@
 (defn update-packages
   [opts]
   (api/update-packages (api/create-basis opts)))
+
+(defn update
+  [opts]
+  (if (contains? opts :package)
+    (update-package opts)
+    (update-packages opts)))
